@@ -1,0 +1,77 @@
+# Tiny Tapeout project information — TMCU minimum-area sky130 cut
+project:
+  title:        "TMCU min-cut"
+  author:       "suleymanemre"
+  discord:      ""
+  description:  "Minimum-area RV32IMC TMCU SoC cut for Tiny Tapeout sky130 area experiments"
+  language:     "SystemVerilog"
+  clock_hz:     25000000
+
+  # Start at max digital size so GDS has room; shrink after utilization is known.
+  # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  tiles: "8x2"
+
+  # Rename to tt_um_<githubuser>_tmcu before submitting to a shuttle.
+  top_module:  "tt_um_suleymanemre_tmcu"
+
+  # Populated by ./sync_rtl.sh — do not hand-edit; re-run sync after RTL changes.
+  source_files:
+    - "pkg/tmcu_pkg.sv"
+    - "core/tmcu_regfile.sv"
+    - "core/tmcu_csr_trap.sv"
+    - "core/tmcu_immediate_gen.sv"
+    - "core/tmcu_alu.sv"
+    - "core/tmcu_mul.sv"
+    - "core/tmcu_div.sv"
+    - "core/tmcu_branch_compare.sv"
+    - "core/tmcu_branch_predictor.sv"
+    - "core/tmcu_decompress.sv"
+    - "core/tmcu_decoder.sv"
+    - "core/tmcu_hazard_unit.sv"
+    - "core/tmcu_pipeline_reg.sv"
+    - "core/tmcu_perf_probe.sv"
+    - "core/tmcu_core.sv"
+    - "tmcu_top.sv"
+    - "memory/tmcu_native_bram.sv"
+    - "memory/tmcu_imem.sv"
+    - "memory/tmcu_dmem.sv"
+    - "interrupt/tmcu_clint.sv"
+    - "interrupt/tmcu_plic.sv"
+    - "interconnect/tmcu_request_router.sv"
+    - "interconnect/tmcu_native_to_axi4lite.sv"
+    - "peripheral/tmcu_gpio.sv"
+    - "peripheral/tmcu_timer.sv"
+    - "peripheral/tmcu_uart.sv"
+    - "peripheral/tmcu_monitor.sv"
+    - "soc/tmcu_soc.sv"
+    - "tt_um_suleymanemre_tmcu.sv"
+
+pinout:
+  ui[0]: ""
+  ui[1]: ""
+  ui[2]: ""
+  ui[3]: ""
+  ui[4]: ""
+  ui[5]: ""
+  ui[6]: ""
+  ui[7]: ""
+
+  uo[0]: "gpio0"
+  uo[1]: "gpio1"
+  uo[2]: "gpio2"
+  uo[3]: "gpio3"
+  uo[4]: "gpio4"
+  uo[5]: "gpio5"
+  uo[6]: "gpio6"
+  uo[7]: "gpio7"
+
+  uio[0]: "gpio0"
+  uio[1]: "gpio1"
+  uio[2]: "gpio2"
+  uio[3]: "gpio3"
+  uio[4]: "gpio4"
+  uio[5]: "gpio5"
+  uio[6]: "gpio6"
+  uio[7]: "gpio7"
+
+yaml_version: 6
