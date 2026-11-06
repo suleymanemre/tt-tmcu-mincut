@@ -5,6 +5,7 @@ tree for measuring how much area a stripped TMCU SoC needs on sky130.
 
 ## Min-cut defaults (`src/tt_um_suleymanemre_tmcu.sv`)
 
+- RV32E (16 GPRs) + C extension off (always 32-bit fetch)
 - 16-word IMEM + 16-word DMEM
 - GPIO only (8-bit)
 - No AXI, CLINT, PLIC, UART, TIMER, MONITOR
@@ -56,5 +57,6 @@ git add src info.yaml test/Makefile
 ## Notes
 
 - Memories become flip-flops on TT (no OpenRAM macros) — keep `MEM_WORDS` tiny.
-- First GDS may still be large: the 5-stage RV32IMC core + CSR/trap dominate.
+- Software target: `-march=rv32e -mabi=ilp32e` (no C, no M).
+- First GDS may still be large: the 5-stage core + CSR/trap dominate.
 - cocotb RTL sim prefers Verilator (`test/Makefile`); Icarus does not parse packages.

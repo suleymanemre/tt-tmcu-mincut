@@ -7,7 +7,7 @@ Tiny Tapeout datasheet source for the TMCU minimum-area sky130 cut.
 This project is a **minimum-area cut** of [TMCU](https://github.com/), an RV32IMC
 5-stage RISC-V microcontroller, prepared for Tiny Tapeout sky130 area experiments.
 
-Default parameters in `tt_um_suleymanemre_tmcu`:
+Default parameters in `tt_um_tmcu`:
 
 | Feature | Setting |
 |---------|---------|

@@ -11,6 +11,10 @@ module tmcu_core #(
   parameter bit DIV_ENABLE = 1'b1,
   parameter bit BP_ENABLE = 1'b1,
   parameter bit DEBUG_ENABLE = 1'b1,
+  // 1: RV32C decompress path. 0: RV32I/E only (always 32-bit fetch).
+  parameter bit COMPRESSED_ENABLE = 1'b1,
+  // 32 = RV32I, 16 = RV32E (physical x1..x15 only).
+  parameter int unsigned REG_COUNT = 32,
   parameter logic [31:0] DMEM_BASE = 32'h2000_0000,
   parameter logic [31:0] DMEM_MASK = 32'hFFFF_0000,
   parameter int unsigned BP_ENTRIES = 128,
@@ -415,7 +419,8 @@ module tmcu_core #(
                            !posted_wb_hold;
 
   tmcu_regfile #(
-    .SHADOW_BANK_ENABLE (SHADOW_BANK_ENABLE)
+    .SHADOW_BANK_ENABLE (SHADOW_BANK_ENABLE),
+    .REG_COUNT          (REG_COUNT)
   ) u_regfile (
     .clk_i          (clk_i),
     .bank_select_i  (csr_shadow_bank),
@@ -598,7 +603,7 @@ module tmcu_core #(
   // hw0[1:0] != 2'b11 → 16-bit compressed (need fq_valid_q[0])
   // hw0[1:0] == 2'b11 → 32-bit            (need fq_valid_q[1:0])
   // -----------------------------------------------------------------------
-  assign presented_is_compressed = (fq_data_q[1:0] != 2'b11);
+  assign presented_is_compressed = COMPRESSED_ENABLE && (fq_data_q[1:0] != 2'b11);
 
   always_comb begin
     presented_valid = 1'b0;
@@ -623,11 +628,16 @@ module tmcu_core #(
     end
   end
 
-  tmcu_decompress u_decompress (
-    .instr_i          (presented_word),
-    .instr_o          (fetch_buffer_decompressed),
-    .is_compressed_o  (fetch_buffer_is_compressed)
-  );
+  if (COMPRESSED_ENABLE) begin : g_decompress
+    tmcu_decompress u_decompress (
+      .instr_i          (presented_word),
+      .instr_o          (fetch_buffer_decompressed),
+      .is_compressed_o  (fetch_buffer_is_compressed)
+    );
+  end else begin : g_no_decompress
+    assign fetch_buffer_decompressed  = presented_word;
+    assign fetch_buffer_is_compressed = 1'b0;
+  end
 
   localparam int BP_bit_size = $clog2(BP_ENTRIES);
   // BP_GSHARE=0: PC-fold bimodal. BP_GSHARE=1: index = pc_fold XOR zero-ext(GHR).

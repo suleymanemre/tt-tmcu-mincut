@@ -1,8 +1,8 @@
 /*
  * Tiny Tapeout wrapper for a minimum-area TMCU SoC cut.
  *
- * Default configuration (area-first):
- *   - 16-word IMEM + 16-word DMEM (FF-backed on sky130)
+ * Default configuration (area + software balance):
+ *   - RV32E (16 GPRs) + C disabled + 16-word IMEM/DMEM
  *   - GPIO only (8-bit on uio)
  *   - No AXI / CLINT / PLIC / UART / TIMER / MONITOR
  *   - No M-extension, branch predictor, or shadow GPR bank
@@ -21,9 +21,8 @@ module tt_um_suleymanemre_tmcu (
     input  wire       clk,
     input  wire       rst_n
 );
-  // Keep memories tiny: 8x2 sky130 is ~302k um2 core; prior 16+16w cut
-  // synthesized to ~176k um2 cells and failed antenna/DPL at ~67% util.
-  localparam int unsigned MEM_WORDS  = 4;
+  // 16 words × 4 B = 64 B window per memory (FF-backed on sky130).
+  localparam int unsigned MEM_WORDS  = 16;
   localparam int unsigned GPIO_WIDTH = 8;
 
   logic [GPIO_WIDTH-1:0] gpio_out;
@@ -81,7 +80,7 @@ module tt_um_suleymanemre_tmcu (
   logic [31:0] dbg_csr_minstreth_unused;
 
   // Tiny on-chip windows: IMEM @ 0x8000_0000, DMEM @ 0x2000_0000.
-  // Masks cover a 16-byte (4-word) aperture.
+  // Masks cover a 64-byte (16-word) aperture.
   tmcu_soc #(
       .RESET_VECTOR       (32'h8000_0000),
       .MTVEC_RESET        (32'h8000_0000),
@@ -98,6 +97,8 @@ module tt_um_suleymanemre_tmcu (
       .BP_ENABLE          (1'b0),
       .TRACE_ENABLE       (1'b0),
       .DEBUG_ENABLE       (1'b0),
+      .COMPRESSED_ENABLE  (1'b0),
+      .REG_COUNT          (16),
       .IMEM_WORDS         (MEM_WORDS),
       .DMEM_WORDS         (MEM_WORDS),
       // Keep default PLIC source count so static IRQ mux indices stay in-range
@@ -105,7 +106,7 @@ module tt_um_suleymanemre_tmcu (
       .PLIC_SOURCES       (16),
       .IMEM_BASE          (32'h8000_0000),
       .DMEM_BASE          (32'h2000_0000),
-      .DMEM_MASK          (32'hFFFF_FFF0),
+      .DMEM_MASK          (32'hFFFF_FFC0),
       .GPIO_BASE          (32'h4000_2000),
       .GPIO_MASK          (32'hFFFF_F000),
       .GPIO_WIDTH         (GPIO_WIDTH),
