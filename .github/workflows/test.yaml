@@ -9,11 +9,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install simulators
+      # Ubuntu 24.04 apt ships Verilator 5.020; cocotb 2.1 needs >= 5.036.
+      - name: Install Verilator 5.036
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y iverilog verilator
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            iverilog git help2man perl python3 make autoconf g++ flex bison \
+            libfl2 libfl-dev zlib1g-dev ccache
+          git clone --depth 1 --branch v5.036 https://github.com/verilator/verilator.git
+          cd verilator
+          autoconf
+          ./configure --prefix="${HOME}/verilator-v5.036"
+          make -j"$(nproc)"
+          make install
+          echo "${HOME}/verilator-v5.036/bin" >> "${GITHUB_PATH}"
+          "${HOME}/verilator-v5.036/bin/verilator" --version
 
-      # Set Python up and install cocotb
       - name: Setup python
         uses: actions/setup-python@v6
         with:
