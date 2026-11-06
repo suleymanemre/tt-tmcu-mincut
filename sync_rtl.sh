@@ -30,6 +30,17 @@ copy() {
 copy "include/tmcu_defs.svh"
 copy "include/tmcu_perf_events.svh"
 copy "include/tmcu_monitor_regs.svh"
+
+# tt_tool.py --create-user-config runs Yosys without -I; Yosys only searches
+# CWD and the including file's directory. Mirror headers next to consumers.
+for hdr_dir in "" pkg core soc peripheral; do
+  dest="${SRC}/${hdr_dir}"
+  mkdir -p "${dest}"
+  install -m 0644 "${RTL}/include/tmcu_defs.svh" "${dest}/tmcu_defs.svh"
+  install -m 0644 "${RTL}/include/tmcu_perf_events.svh" "${dest}/tmcu_perf_events.svh"
+  install -m 0644 "${RTL}/include/tmcu_monitor_regs.svh" "${dest}/tmcu_monitor_regs.svh"
+done
+
 copy "pkg/tmcu_pkg.sv"
 copy "core/tmcu_regfile.sv"
 copy "core/tmcu_csr_trap.sv"
@@ -88,7 +99,7 @@ SOURCES=(
   "peripheral/tmcu_uart.sv"
   "peripheral/tmcu_monitor.sv"
   "soc/tmcu_soc.sv"
-  "tt_um_tmcu.sv"
+  "tt_um_suleymanemre_tmcu.sv"
 )
 
 python3 - "${ROOT}/info.yaml" "${SOURCES[@]}" <<'PY'
