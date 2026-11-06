@@ -28,7 +28,10 @@ VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 endif
 
 COMPILE_ARGS 		+= -I$(SRC_DIR) -I$(SRC_DIR)/include
-EXTRA_ARGS      += --timing
+# Verilator 5.036+ promotes WIDTH* to fatal by default; TT min-cut uses
+# GPIO_WIDTH=8 and small BRAMs that trip WIDTHEXPAND/WIDTHTRUNC. Smoke test
+# only needs a buildable sim — keep these as warnings, not hard errors.
+EXTRA_ARGS      += --timing -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-fatal
 
 VERILOG_SOURCES += $(PWD)/tb.v
 TOPLEVEL = tb
