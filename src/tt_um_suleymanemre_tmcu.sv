@@ -21,7 +21,9 @@ module tt_um_suleymanemre_tmcu (
     input  wire       clk,
     input  wire       rst_n
 );
-  localparam int unsigned MEM_WORDS  = 16;
+  // Keep memories tiny: 8x2 sky130 is ~302k um2 core; prior 16+16w cut
+  // synthesized to ~176k um2 cells and failed antenna/DPL at ~67% util.
+  localparam int unsigned MEM_WORDS  = 4;
   localparam int unsigned GPIO_WIDTH = 8;
 
   logic [GPIO_WIDTH-1:0] gpio_out;
@@ -79,7 +81,7 @@ module tt_um_suleymanemre_tmcu (
   logic [31:0] dbg_csr_minstreth_unused;
 
   // Tiny on-chip windows: IMEM @ 0x8000_0000, DMEM @ 0x2000_0000.
-  // Masks cover a 64-byte (16-word) aperture.
+  // Masks cover a 16-byte (4-word) aperture.
   tmcu_soc #(
       .RESET_VECTOR       (32'h8000_0000),
       .MTVEC_RESET        (32'h8000_0000),
@@ -103,7 +105,7 @@ module tt_um_suleymanemre_tmcu (
       .PLIC_SOURCES       (16),
       .IMEM_BASE          (32'h8000_0000),
       .DMEM_BASE          (32'h2000_0000),
-      .DMEM_MASK          (32'hFFFF_FFC0),
+      .DMEM_MASK          (32'hFFFF_FFF0),
       .GPIO_BASE          (32'h4000_2000),
       .GPIO_MASK          (32'hFFFF_F000),
       .GPIO_WIDTH         (GPIO_WIDTH),

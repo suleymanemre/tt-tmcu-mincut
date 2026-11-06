@@ -699,19 +699,23 @@ module tmcu_core #(
     assign bp_update_index = bp_pc_hash_update;
   end
 
-  tmcu_branch_predictor #(
-    .BP_ENABLE (BP_ENABLE),
-    .BP_ENTRIES (BP_ENTRIES),
-    .BP_BIT_SIZE (BP_bit_size)
-  ) u_branch_predictor (
-    .clk_i           (clk_i),
-    .rst_ni          (rst_ni),
-    .lookup_index_i  (bp_lookup_index),
-    .predict_taken_o (bp_predict_taken),
-    .update_valid_i  (bp_update_valid),
-    .update_index_i  (bp_update_index),
-    .update_taken_i  (bp_update_taken)
-  );
+  if (BP_ENABLE) begin : g_branch_predictor
+    tmcu_branch_predictor #(
+      .BP_ENABLE (1'b1),
+      .BP_ENTRIES (BP_ENTRIES),
+      .BP_BIT_SIZE (BP_bit_size)
+    ) u_branch_predictor (
+      .clk_i           (clk_i),
+      .rst_ni          (rst_ni),
+      .lookup_index_i  (bp_lookup_index),
+      .predict_taken_o (bp_predict_taken),
+      .update_valid_i  (bp_update_valid),
+      .update_index_i  (bp_update_index),
+      .update_taken_i  (bp_update_taken)
+    );
+  end else begin : g_no_branch_predictor
+    assign bp_predict_taken = 1'b0;
+  end
 
   logic [31:0] branch_prediction_target;
   assign branch_prediction_target = presented_pc + presented_branch_imm;

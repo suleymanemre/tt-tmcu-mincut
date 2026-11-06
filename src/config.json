@@ -13,15 +13,22 @@
 
   "//": "PL_TARGET_DENSITY_PCT - You can increase this if Global Placement fails with error GPL-0302.",
   "//": "Users have reported that values up to 80 worked well for them.",
-  "PL_TARGET_DENSITY_PCT": 55,
+  "PL_TARGET_DENSITY_PCT": 70,
 
   "//": "CLOCK_PERIOD - Increase this in case you are getting setup time violations.",
-  "//": "The value is in nanoseconds, so 40ns == 25MHz (safer for a 5-stage RV core).",
-  "CLOCK_PERIOD": 40,
+  "//": "The value is in nanoseconds, so 80ns == 12.5MHz (relax CTS/buffer growth).",
+  "CLOCK_PERIOD": 80,
 
   "//": "Include dirs relative to src/ (LibreLane). Headers are also mirrored",
   "//": "beside .sv files so tt_tool Yosys port-check finds them without -I.",
   "VERILOG_INCLUDE_DIRS": ["dir::include", "dir::.", "dir::core", "dir::pkg", "dir::soc", "dir::peripheral"],
+
+  "//": "Prior 8x2 harden failed in diode insertion (DPL-0036) after congested GRT.",
+  "//": "Skip antenna repair for the area experiment; still produces GDS/metrics.",
+  "GRT_REPAIR_ANTENNAS": false,
+  "RUN_HEURISTIC_DIODE_INSERTION": false,
+  "DIODE_ON_PORTS": "none",
+  "MAX_FANOUT_CONSTRAINT": 64,
 
   "//": "Hold slack margin - Increase them in case you are getting hold violations.",
   "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
