@@ -674,7 +674,11 @@ module tmcu_core #(
     logic [GHR_WIDTH-1:0] ghr_q;
     logic [BP_bit_size-1:0] bp_ghr_pad;
 
-    assign bp_ghr_pad = BP_bit_size'(ghr_q);
+    // Avoid SV cast / concat-select forms that Yosys port-check rejects.
+    always_comb begin
+      bp_ghr_pad = '0;
+      bp_ghr_pad[GHR_WIDTH-1:0] = ghr_q;
+    end
     assign bp_lookup_index = bp_pc_hash_lookup ^ bp_ghr_pad;
     assign bp_update_index = id_ex_bp_index_q;
 
@@ -683,7 +687,11 @@ module tmcu_core #(
         ghr_q <= '0;
       end else if (BP_ENABLE && bp_update_valid) begin
         // Shift in resolved taken/not-taken at LSB (works for GHR_WIDTH >= 1).
-        ghr_q <= {ghr_q, bp_update_taken}[GHR_WIDTH-1:0];
+        if (GHR_WIDTH == 1) begin
+          ghr_q <= bp_update_taken;
+        end else begin
+          ghr_q <= {ghr_q[GHR_WIDTH-2:0], bp_update_taken};
+        end
       end
     end
   end else begin : g_bp_bimodal

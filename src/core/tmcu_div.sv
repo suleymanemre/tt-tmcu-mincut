@@ -41,17 +41,18 @@ module tmcu_div (
   logic [31:0] signed_quot;
   logic [31:0] signed_rem;
 
+  // Prefer function-name assigns: Yosys port-check is picky about SV `return`.
   function automatic logic is_rem_op(input logic [4:0] op);
-    return (op == `TMCU_ALU_REM) || (op == `TMCU_ALU_REMU);
+    is_rem_op = (op == `TMCU_ALU_REM) || (op == `TMCU_ALU_REMU);
   endfunction
 
   function automatic logic is_unsigned_op(input logic [4:0] op);
-    return (op == `TMCU_ALU_DIVU) || (op == `TMCU_ALU_REMU);
+    is_unsigned_op = (op == `TMCU_ALU_DIVU) || (op == `TMCU_ALU_REMU);
   endfunction
 
   function automatic logic [31:0] abs32(input logic [31:0] v, input logic signed_mode);
-    if (signed_mode && v[31]) return (~v + 32'd1);
-    return v;
+    if (signed_mode && v[31]) abs32 = (~v + 32'd1);
+    else abs32 = v;
   endfunction
 
   function automatic logic [5:0] clz32(input logic [31:0] v);
@@ -64,7 +65,7 @@ module tmcu_div (
     if (tmp[31:28] == 4'b0)  begin count = count + 6'd4;  tmp = tmp << 4;  end
     if (tmp[31:30] == 2'b0)  begin count = count + 6'd2;  tmp = tmp << 2;  end
     if (tmp[31]    == 1'b0)  begin count = count + 6'd1; end
-    return count;
+    clz32 = count;
   endfunction
 
   always_comb begin

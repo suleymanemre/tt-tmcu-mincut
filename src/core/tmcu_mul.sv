@@ -26,10 +26,10 @@ module tmcu_mul #(
   logic signed [65:0] product_comb;
   /* verilator lint_on  UNUSEDSIGNAL */
 
+  // Yosys (tt_tool port-check) rejects multi-line `return a || b`; assign instead.
   function automatic logic is_high_mul(input logic [4:0] op);
-    return (op == `TMCU_ALU_MULH) ||
-           (op == `TMCU_ALU_MULHSU) ||
-           (op == `TMCU_ALU_MULHU);
+    is_high_mul = (op == `TMCU_ALU_MULH) || (op == `TMCU_ALU_MULHSU) ||
+                  (op == `TMCU_ALU_MULHU);
   endfunction
 
   always_comb begin
