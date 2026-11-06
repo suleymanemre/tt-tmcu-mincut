@@ -30,6 +30,11 @@
   "DIODE_ON_PORTS": "none",
   "MAX_FANOUT_CONSTRAINT": 64,
 
+  "//": "Flat synth hangs GH runners in Yosys opt_dff (Adding EN/SRST) on this SoC.",
+  "//": "Synthesize with hierarchy, flatten only after synth for PnR.",
+  "SYNTH_HIERARCHY_MODE": "deferred_flatten",
+  "SYNTH_STRATEGY": "AREA 2",
+
   "//": "Hold slack margin - Increase them in case you are getting hold violations.",
   "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
   "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
