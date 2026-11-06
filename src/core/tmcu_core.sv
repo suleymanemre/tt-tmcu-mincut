@@ -15,6 +15,8 @@ module tmcu_core #(
   parameter bit COMPRESSED_ENABLE = 1'b1,
   // 32 = RV32I, 16 = RV32E (physical x1..x15 only).
   parameter int unsigned REG_COUNT = 32,
+  // Physical width of mcycle / minstret (1..64).
+  parameter int unsigned COUNTER_WIDTH = 64,
   parameter logic [31:0] DMEM_BASE = 32'h2000_0000,
   parameter logic [31:0] DMEM_MASK = 32'hFFFF_0000,
   parameter int unsigned BP_ENTRIES = 128,
@@ -448,7 +450,8 @@ module tmcu_core #(
 
   tmcu_csr_trap #(
     .MTVEC_RESET        (MTVEC_RESET),
-    .SHADOW_BANK_ENABLE (SHADOW_BANK_ENABLE)
+    .SHADOW_BANK_ENABLE (SHADOW_BANK_ENABLE),
+    .COUNTER_WIDTH      (COUNTER_WIDTH)
   ) u_csr_trap (
     .clk_i                 (clk_i),
     .rst_ni                (rst_ni),

@@ -99,6 +99,7 @@ module tt_um_suleymanemre_tmcu (
       .DEBUG_ENABLE       (1'b0),
       .COMPRESSED_ENABLE  (1'b0),
       .REG_COUNT          (16),
+      .COUNTER_WIDTH      (28),
       .IMEM_WORDS         (MEM_WORDS),
       .DMEM_WORDS         (MEM_WORDS),
       // Keep default PLIC source count so static IRQ mux indices stay in-range

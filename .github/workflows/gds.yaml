@@ -4,6 +4,11 @@ on:
   push:
   workflow_dispatch:
 
+# One GDS at a time — parallel LibreLane jobs starve each other on free runners.
+concurrency:
+  group: gds-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gds:
     runs-on: ubuntu-24.04

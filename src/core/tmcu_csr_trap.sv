@@ -3,7 +3,9 @@
 
 module tmcu_csr_trap #(
   parameter logic [31:0] MTVEC_RESET = 32'h0000_0000,
-  parameter bit SHADOW_BANK_ENABLE = 1'b1
+  parameter bit SHADOW_BANK_ENABLE = 1'b1,
+  // Physical width of mcycle / minstret (1..64). CSR *h reads zero when <= 32.
+  parameter int unsigned COUNTER_WIDTH = 64
 ) (
   input  logic        clk_i,
   input  logic        rst_ni,
@@ -55,6 +57,11 @@ module tmcu_csr_trap #(
   output logic [31:0] dbg_csr_minstret_o,
   output logic [31:0] dbg_csr_minstreth_o
 );
+  // Clamp to a synthesizable 1..64 range.
+  localparam int unsigned CTR_W =
+      (COUNTER_WIDTH < 1) ? 1 : ((COUNTER_WIDTH > 64) ? 64 : COUNTER_WIDTH);
+  localparam int unsigned CTR_PAD = 64 - CTR_W;
+
   logic [31:0] mstatus_q;
   logic [31:0] mie_q;
   logic [31:0] mtvec_q;
@@ -63,12 +70,32 @@ module tmcu_csr_trap #(
   logic [31:0] mcause_q;
   logic [31:0] mtval_q;
   logic [31:0] mip_software_q;
-  logic [63:0] mcycle_q;
-  logic [63:0] minstret_q;
+  logic [CTR_W-1:0] mcycle_q;
+  logic [CTR_W-1:0] minstret_q;
+  logic [63:0] mcycle_ext;
+  logic [63:0] minstret_ext;
+  logic [63:0] mcycle_wr_lo;
+  logic [63:0] mcycle_wr_hi;
+  logic [63:0] minstret_wr_lo;
+  logic [63:0] minstret_wr_hi;
   logic [31:0] mip_value;
   logic        irq_ext_pend;
   logic        irq_sw_pend;
   logic        irq_tm_pend;
+
+  // Zero-width pad (CTR_W==64) is illegal in some SV frontends — branch it.
+  if (CTR_PAD == 0) begin : g_ctr_full
+    assign mcycle_ext   = mcycle_q;
+    assign minstret_ext = minstret_q;
+  end else begin : g_ctr_pad
+    assign mcycle_ext   = {{CTR_PAD{1'b0}}, mcycle_q};
+    assign minstret_ext = {{CTR_PAD{1'b0}}, minstret_q};
+  end
+  // Avoid concat-then-select (YoWASP/Yosys SV frontend limitation).
+  assign mcycle_wr_lo   = {mcycle_ext[63:32], csr_write_data_i};
+  assign mcycle_wr_hi   = {csr_write_data_i, mcycle_ext[31:0]};
+  assign minstret_wr_lo = {minstret_ext[63:32], csr_write_data_i};
+  assign minstret_wr_hi = {csr_write_data_i, minstret_ext[31:0]};
 
   function automatic logic csr_address_valid(input logic [11:0] address);
     begin
@@ -109,10 +136,10 @@ module tmcu_csr_trap #(
       `TMCU_CSR_MCAUSE:    csr_access_rdata_o = mcause_q;
       `TMCU_CSR_MTVAL:     csr_access_rdata_o = mtval_q;
       `TMCU_CSR_MIP:       csr_access_rdata_o = mip_value;
-      `TMCU_CSR_MCYCLE:    csr_access_rdata_o = mcycle_q[31:0];
-      `TMCU_CSR_MCYCLEH:   csr_access_rdata_o = mcycle_q[63:32];
-      `TMCU_CSR_MINSTRET:  csr_access_rdata_o = minstret_q[31:0];
-      `TMCU_CSR_MINSTRETH: csr_access_rdata_o = minstret_q[63:32];
+      `TMCU_CSR_MCYCLE:    csr_access_rdata_o = mcycle_ext[31:0];
+      `TMCU_CSR_MCYCLEH:   csr_access_rdata_o = mcycle_ext[63:32];
+      `TMCU_CSR_MINSTRET:  csr_access_rdata_o = minstret_ext[31:0];
+      `TMCU_CSR_MINSTRETH: csr_access_rdata_o = minstret_ext[63:32];
       default:             csr_access_rdata_o = 32'b0;
     endcase
   end
@@ -144,10 +171,10 @@ module tmcu_csr_trap #(
   assign dbg_csr_mcause_o    = mcause_q;
   assign dbg_csr_mtval_o     = mtval_q;
   assign dbg_csr_mip_o       = mip_value;
-  assign dbg_csr_mcycle_o    = mcycle_q[31:0];
-  assign dbg_csr_mcycleh_o   = mcycle_q[63:32];
-  assign dbg_csr_minstret_o  = minstret_q[31:0];
-  assign dbg_csr_minstreth_o = minstret_q[63:32];
+  assign dbg_csr_mcycle_o    = mcycle_ext[31:0];
+  assign dbg_csr_mcycleh_o   = mcycle_ext[63:32];
+  assign dbg_csr_minstret_o  = minstret_ext[31:0];
+  assign dbg_csr_minstreth_o = minstret_ext[63:32];
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
@@ -213,25 +240,25 @@ module tmcu_csr_trap #(
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      mcycle_q <= 64'b0;
+      mcycle_q <= '0;
     end else if (csr_write_i && (csr_write_addr_i == `TMCU_CSR_MCYCLE)) begin
-      mcycle_q <= {mcycle_q[63:32], csr_write_data_i};
+      mcycle_q <= mcycle_wr_lo[CTR_W-1:0];
     end else if (csr_write_i && (csr_write_addr_i == `TMCU_CSR_MCYCLEH)) begin
-      mcycle_q <= {csr_write_data_i, mcycle_q[31:0]};
+      mcycle_q <= mcycle_wr_hi[CTR_W-1:0];
     end else begin
-      mcycle_q <= mcycle_q + 64'd1;
+      mcycle_q <= mcycle_q + {{(CTR_W-1){1'b0}}, 1'b1};
     end
   end
 
   always_ff @(posedge clk_i) begin
     if (!rst_ni) begin
-      minstret_q <= 64'b0;
+      minstret_q <= '0;
     end else if (csr_write_i && (csr_write_addr_i == `TMCU_CSR_MINSTRET)) begin
-      minstret_q <= {minstret_q[63:32], csr_write_data_i};
+      minstret_q <= minstret_wr_lo[CTR_W-1:0];
     end else if (csr_write_i && (csr_write_addr_i == `TMCU_CSR_MINSTRETH)) begin
-      minstret_q <= {csr_write_data_i, minstret_q[31:0]};
+      minstret_q <= minstret_wr_hi[CTR_W-1:0];
     end else if (instruction_retired_i) begin
-      minstret_q <= minstret_q + 64'd1;
+      minstret_q <= minstret_q + {{(CTR_W-1){1'b0}}, 1'b1};
     end
   end
 endmodule

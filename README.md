@@ -6,6 +6,7 @@ tree for measuring how much area a stripped TMCU SoC needs on sky130.
 ## Min-cut defaults (`src/tt_um_suleymanemre_tmcu.sv`)
 
 - RV32E (16 GPRs) + C extension off (always 32-bit fetch)
+- 28-bit `mcycle` / `minstret` (`COUNTER_WIDTH=28`)
 - 16-word IMEM + 16-word DMEM
 - GPIO only (8-bit)
 - No AXI, CLINT, PLIC, UART, TIMER, MONITOR
