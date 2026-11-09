@@ -1,14 +1,12 @@
 name: gds
 
 on:
-  # Skip GDS restart on docs/test-only pushes (keeps a long harden from being cancelled).
+  # Only harden when RTL/config changes — workflow/test/docs edits must not
+  # cancel a multi-hour LibreLane job.
   push:
-    paths-ignore:
-      - '.github/workflows/test.yaml'
-      - '.github/workflows/docs.yaml'
-      - 'test/**'
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - 'src/**'
+      - 'info.yaml'
   workflow_dispatch:
 
 # One GDS at a time — parallel LibreLane jobs starve each other on free runners.
@@ -46,14 +44,25 @@ jobs:
         with:
           submodules: recursive
 
+      # Gate-level netlist is plain Verilog; Icarus is enough and avoids the
+      # cocotb↔Verilator version dance that broke this job previously.
+      - name: Install Icarus Verilog
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
       - name: GL test
+        env:
+          SIM: icarus
         uses: TinyTapeout/tt-gds-action/gl_test@ttsky26d
 
   viewer:
     needs: gds
+    # Pages must be enabled in repo Settings → Pages (source: GitHub Actions).
+    # Do not fail the whole workflow if Pages is not configured yet.
+    continue-on-error: true
     runs-on: ubuntu-24.04
     permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
+      pages: write
+      id-token: write
     steps:
       - uses: TinyTapeout/tt-gds-action/viewer@ttsky26d

@@ -1,8 +1,14 @@
 # Makefile
 # See https://docs.cocotb.org/en/stable/quickstart.html for more info
 
-# defaults — Verilator preferred (design uses SystemVerilog packages).
+# Gate-level (GATES=yes) is structural Verilog → Icarus.
+# RTL uses SystemVerilog packages → Verilator.
+ifeq ($(GATES),yes)
+SIM ?= icarus
+else
 SIM ?= verilator
+endif
+
 FST ?= -fst
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
@@ -12,6 +18,9 @@ ifneq ($(GATES),yes)
 
 SIM_BUILD				= sim_build/rtl
 VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
+# Verilator 5.036+ promotes WIDTH* to fatal by default; TT min-cut uses
+# GPIO_WIDTH=8 and small BRAMs that trip WIDTHEXPAND/WIDTHTRUNC.
+EXTRA_ARGS      += --timing -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-fatal
 
 else
 
@@ -28,10 +37,6 @@ VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 endif
 
 COMPILE_ARGS 		+= -I$(SRC_DIR) -I$(SRC_DIR)/include
-# Verilator 5.036+ promotes WIDTH* to fatal by default; TT min-cut uses
-# GPIO_WIDTH=8 and small BRAMs that trip WIDTHEXPAND/WIDTHTRUNC. Smoke test
-# only needs a buildable sim — keep these as warnings, not hard errors.
-EXTRA_ARGS      += --timing -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-fatal
 
 VERILOG_SOURCES += $(PWD)/tb.v
 TOPLEVEL = tb
