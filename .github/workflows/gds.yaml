@@ -17,23 +17,83 @@ concurrency:
 jobs:
   gds:
     runs-on: ubuntu-24.04
+    env:
+      PDK_ROOT: /home/runner/pdk
+      # Must match the open_pdks commit LibreLane/ttsky26d resolves to.
+      CIEL_PDK_FAMILY: sky130
+      CIEL_PDK_VERSION: 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
     steps:
       - name: checkout repo
         uses: actions/checkout@v6
         with:
           submodules: recursive
 
-      # ciel PDK fetch often hits httpx.ReadTimeout on cold runners; retry the
-      # whole TT harden action a few times before giving up.
-      - name: Build GDS
-        uses: Wandalen/wretry.action@v3.8.0
+      # ciel's default httpx timeout is ~5s; cold runners then fail with
+      # ReadTimeout while downloading the sky130 tarballs. Prefetch with a
+      # long timeout + disk cache so Harden finds the PDK already present.
+      - name: Cache sky130 PDK
+        id: pdk-cache
+        uses: actions/cache@v4
         with:
-          attempt_limit: 3
-          attempt_delay: 60000
-          action: TinyTapeout/tt-gds-action@ttsky26d
-          with: |
-            pdk: sky130A
+          path: ${{ env.PDK_ROOT }}
+          key: ciel-${{ env.CIEL_PDK_FAMILY }}-${{ env.CIEL_PDK_VERSION }}-v1
 
+      - name: Prefetch sky130 PDK (long HTTP timeout)
+        if: steps.pdk-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user 'ciel==2.6.1' 'httpx' 'rich' 'zstandard'
+          export PATH="${HOME}/.local/bin:${PATH}"
+          python3 <<'PY'
+          import httpx
+          import ciel.github
+          from ciel.manage import enable
+          from ciel.source import StaticWebDataSource
+          from rich.console import Console
+          import os
+
+          _orig = ciel.github.GitHubSession.__init__
+
+          def _init(self, *args, **kwargs):
+              kwargs.setdefault(
+                  "timeout",
+                  httpx.Timeout(1800.0, connect=120.0, pool=120.0),
+              )
+              return _orig(self, *args, **kwargs)
+
+          ciel.github.GitHubSession.__init__ = _init
+
+          pdk_root = os.environ["PDK_ROOT"]
+          family = os.environ["CIEL_PDK_FAMILY"]
+          version = os.environ["CIEL_PDK_VERSION"]
+          ds = StaticWebDataSource(
+              "https://fossi-foundation.github.io/ciel-releases"
+          )
+          console = Console()
+          last = None
+          for attempt in range(1, 4):
+              try:
+                  console.print(f"[bold]ciel enable attempt {attempt}/3[/bold]")
+                  enable(
+                      pdk_root,
+                      family,
+                      version,
+                      data_source=ds,
+                      output=console,
+                  )
+                  console.print("[green]PDK ready[/green]")
+                  raise SystemExit(0)
+              except Exception as e:
+                  last = e
+                  console.print(f"[red]attempt {attempt} failed: {e}[/red]")
+          raise SystemExit(f"PDK prefetch failed: {last}")
+          PY
+
+      - name: Build GDS
+        uses: TinyTapeout/tt-gds-action@ttsky26d
+        with:
+          pdk: sky130A
 
   precheck:
     needs: gds
