@@ -23,10 +23,17 @@ jobs:
         with:
           submodules: recursive
 
+      # ciel PDK fetch often hits httpx.ReadTimeout on cold runners; retry the
+      # whole TT harden action a few times before giving up.
       - name: Build GDS
-        uses: TinyTapeout/tt-gds-action@ttsky26d
+        uses: Wandalen/wretry.action@v3.8.0
         with:
-          pdk: sky130A
+          attempt_limit: 3
+          attempt_delay: 60000
+          action: TinyTapeout/tt-gds-action@ttsky26d
+          with: |
+            pdk: sky130A
+
 
   precheck:
     needs: gds
