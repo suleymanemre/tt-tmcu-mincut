@@ -8,20 +8,30 @@ on:
       - 'src/**'
       - 'info.yaml'
   workflow_dispatch:
+    inputs:
+      gl_only:
+        description: 'Skip harden; only re-run GL test using tt_submission from gds_run_id'
+        type: boolean
+        default: false
+      gds_run_id:
+        description: 'Workflow run ID that produced the tt_submission artifact'
+        type: string
+        default: '42573356697'
 
 # One GDS at a time — parallel LibreLane jobs starve each other on free runners.
 concurrency:
   group: gds-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PDK_ROOT: /home/runner/pdk
+  CIEL_PDK_FAMILY: sky130
+  CIEL_PDK_VERSION: 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
+
 jobs:
   gds:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.gl_only) }}
     runs-on: ubuntu-24.04
-    env:
-      PDK_ROOT: /home/runner/pdk
-      # Must match the open_pdks commit LibreLane/ttsky26d resolves to.
-      CIEL_PDK_FAMILY: sky130
-      CIEL_PDK_VERSION: 8afc8346a57fe1ab7934ba5a6056ea8b43078e71
     steps:
       - name: checkout repo
         uses: actions/checkout@v6
@@ -41,54 +51,7 @@ jobs:
       - name: Prefetch sky130 PDK (long HTTP timeout)
         if: steps.pdk-cache.outputs.cache-hit != 'true'
         shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m pip install --user 'ciel==2.6.1' 'httpx' 'rich' 'zstandard'
-          export PATH="${HOME}/.local/bin:${PATH}"
-          python3 <<'PY'
-          import httpx
-          import ciel.github
-          from ciel.manage import enable
-          from ciel.source import StaticWebDataSource
-          from rich.console import Console
-          import os
-
-          _orig = ciel.github.GitHubSession.__init__
-
-          def _init(self, *args, **kwargs):
-              kwargs.setdefault(
-                  "timeout",
-                  httpx.Timeout(1800.0, connect=120.0, pool=120.0),
-              )
-              return _orig(self, *args, **kwargs)
-
-          ciel.github.GitHubSession.__init__ = _init
-
-          pdk_root = os.environ["PDK_ROOT"]
-          family = os.environ["CIEL_PDK_FAMILY"]
-          version = os.environ["CIEL_PDK_VERSION"]
-          ds = StaticWebDataSource(
-              "https://fossi-foundation.github.io/ciel-releases"
-          )
-          console = Console()
-          last = None
-          for attempt in range(1, 4):
-              try:
-                  console.print(f"[bold]ciel enable attempt {attempt}/3[/bold]")
-                  enable(
-                      pdk_root,
-                      family,
-                      version,
-                      data_source=ds,
-                      output=console,
-                  )
-                  console.print("[green]PDK ready[/green]")
-                  raise SystemExit(0)
-              except Exception as e:
-                  last = e
-                  console.print(f"[red]attempt {attempt} failed: {e}[/red]")
-          raise SystemExit(f"PDK prefetch failed: {last}")
-          PY
+        run: bash .github/scripts/prefetch_pdk.sh
 
       - name: Build GDS
         uses: TinyTapeout/tt-gds-action@ttsky26d
@@ -96,6 +59,7 @@ jobs:
           pdk: sky130A
 
   precheck:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.gl_only) }}
     needs: gds
     runs-on: ubuntu-24.04
     steps:
@@ -103,7 +67,9 @@ jobs:
         uses: TinyTapeout/tt-gds-action/precheck@ttsky26d
 
   gl_test:
-    needs: gds
+    # Run after successful harden, or standalone via gl_only using a prior artifact.
+    needs: [gds]
+    if: ${{ always() && (needs.gds.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.gl_only)) }}
     runs-on: ubuntu-24.04
     steps:
       - name: checkout repo
@@ -111,21 +77,90 @@ jobs:
         with:
           submodules: recursive
 
-      # Gate-level netlist is plain Verilog; Icarus is enough and avoids the
-      # cocotb↔Verilator version dance that broke this job previously.
+      - name: Cache sky130 PDK
+        id: pdk-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PDK_ROOT }}
+          key: ciel-${{ env.CIEL_PDK_FAMILY }}-${{ env.CIEL_PDK_VERSION }}-v1
+
+      - name: Prefetch sky130 PDK (long HTTP timeout)
+        if: steps.pdk-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash .github/scripts/prefetch_pdk.sh
+
+      # Re-enable after cache restore so variant symlinks exist for this runner.
+      - name: Enable cached PDK
+        if: steps.pdk-cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: bash .github/scripts/prefetch_pdk.sh
+
+      - name: Download tt_submission from this workflow
+        if: ${{ needs.gds.result == 'success' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: tt_submission
+          path: tt_submission
+
+      - name: Download tt_submission from prior GDS run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.gl_only }}
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          run_id: ${{ inputs.gds_run_id }}
+          name: tt_submission
+          path: tt_submission
+
+      - name: Setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python packages
+        shell: bash
+        run: pip install -r test/requirements.txt
+
       - name: Install Icarus Verilog
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y iverilog
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y iverilog
 
-      - name: GL test
+      - name: Run gate-level smoke test
         env:
           SIM: icarus
-        uses: TinyTapeout/tt-gds-action/gl_test@ttsky26d
+          PDK: sky130A
+          PDK_ROOT: ${{ env.PDK_ROOT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # TT submission layout may nest once more under tt_submission/
+          NETLIST=$(find tt_submission -name 'tt_um_*.v' -not -path '*/src/*' | head -1)
+          test -n "$NETLIST"
+          cp "$NETLIST" test/gate_level_netlist.v
+          cd test
+          rm -f tb.vcd tb.fst results.xml
+          make clean
+          GATES=yes make
+          test -f results.xml
+          ! grep -E '<(failure|error)' results.xml
+
+      - name: Upload Waveform and Test Results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gatelevel_test_results
+          path: |
+            test/tb.vcd
+            test/tb.fst
+            test/results.xml
+            test/output/*
+          if-no-files-found: warn
 
   viewer:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.gl_only) }}
     needs: gds
     # Pages must be enabled in repo Settings → Pages (source: GitHub Actions).
-    # Do not fail the whole workflow if Pages is not configured yet.
     continue-on-error: true
     runs-on: ubuntu-24.04
     permissions:
